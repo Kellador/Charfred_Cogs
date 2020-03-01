@@ -180,7 +180,6 @@ class ServerConfig(commands.Cog):
              'Current path to the directory where all minecraft server '
              'directories are located is:\n'),
             ('backupspath',
-             None,
              self.servercfg['backupspath'],
              'Current path to the directory where backups are saved is:\n'),
             ('oldTimer',
