@@ -1,6 +1,5 @@
 from discord.ext import commands
 import discord
-import re
 import logging
 from utils import Config, permission_node, EmbedFlipbook
 
@@ -28,31 +27,52 @@ class ServerConfig(commands.Cog):
             await ctx.send(f'{server} is already listed!')
             return
 
-        def check(m):
-            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
-
         self.servercfg['servers'][server] = {}
 
-        await ctx.send(f'```Beginning configuration for {server}!'
-                       f'\nPlease enter the invocation for {server}:```')
-        r1 = await self.bot.wait_for('message', check=check, timeout=120)
-        self.servercfg['servers'][server]['invocation'] = r1.content
+        invocation, _, timedout = await ctx.promptinput(
+            f'# Beginning configuration for {server}!'
+            f'\nPlease enter the invocation for {server}:'
+        )
+        if timedout:
+            return
 
-        await ctx.send(f'```Please enter the name of the main world folder for {server}:```')
-        r3 = await self.bot.wait_for('message', check=check, timeout=120)
-        self.servercfg['servers'][server]['worldname'] = r3.content
+        worldname, _, timedout = await ctx.promptinput(
+            f'Please enter the name of the main world folder for {server}:'
+        )
+        if timedout:
+            return
 
-        await ctx.sendmarkdown(f'You have entered the following for {server}:\n' +
-                               f'Invocation: {r1.content}\n' +
-                               f'Worldname: {r3.content}\n' +
-                               '# Please confirm! [y/n]')
-        r4 = await self.bot.wait_for('message', check=check, timeout=120)
-        if re.match('(y|yes)', r4.content, flags=re.I):
+        questing, _, timedout = await ctx.promptconfirm_or_input(
+            f'If {server} has questing, which you want to back up with Spiffy, '
+            f'please enter the path from {worldname} to the quest directory.\n'
+            '< If it has no questing or you don\'t want to back it up, just reply'
+            ' with "no" >',
+            confirm=False
+        )
+        if timedout:
+            return
+
+        confirmed, _, timedout = await ctx.promptconfirm(
+            f'You have entered the following for {server}:\n'
+            f'Invocation: {invocation}\n'
+            f'Worldname: {worldname}\n'
+            f'Questing: {questing}\n'
+            '# Please confirm! [y/n]'
+        )
+        if timedout:
+            return
+
+        if confirmed:
+            self.servercfg['servers'][server] = {
+                'invocation': invocation,
+                'worldname': worldname
+            }
+            if questing:
+                self.servercfg['servers'][server]['questing'] = questing
             await self.servercfg.save()
             await ctx.sendmarkdown(f'# Serverconfigurations for {server} have been saved!')
         else:
-            del self.servercfg['servers'][server]
-            await ctx.sendmarkdown(f'< Serverconfigurations for {server} have been discarded. >')
+            await ctx.sendmarkdown(f'< Pending entries for {server} have been discarded. >')
 
     @config.command(name='list')
     async def _list(self, ctx, server: str):
@@ -94,25 +114,35 @@ class ServerConfig(commands.Cog):
             await ctx.sendmarkdown(f'< No configurations for {server} listed! >')
             return
 
-        def check(m):
-            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
-
-        await ctx.sendmarkdown(f'Available options for {server}: ' +
-                               ' '.join(self.servercfg['servers'][server].keys()))
-        await ctx.sendmarkdown(f'# Please enter the configuration option for {server}, that you want to edit:')
-        r = await self.bot.wait_for('message', check=check, timeout=120)
-        r = r.content.lower()
-        if r not in self.servercfg['servers'][server]:
-            await ctx.sendmarkdown(f'< {r.content.lower()} is not a valid entry! >')
+        opt, _, timedout = await ctx.promptinput(
+            f'Available options for {server}: ' +
+            ' '.join(self.servercfg['servers'][server].keys()) +
+            f'\n# Please enter the configuration option for {server}, that you want to edit:'
+        )
+        if timedout:
             return
-        await ctx.sendmarkdown(f'Please enter the new value for {r}:')
-        r2 = await self.bot.wait_for('message', check=check, timeout=120)
-        await ctx.sendmarkdown(f'You have entered the following for {server}:\n' +
-                               f'{r}: {r2.content}\n' +
-                               '# Please confirm! [y/n]')
-        r3 = await self.bot.wait_for('message', check=check, timeout=120)
-        if re.match('(y|yes)', r3.content, flags=re.I):
-            self.servercfg['servers'][server][r] = r2.content
+        opt = opt.lower()
+
+        if opt not in self.servercfg['servers'][server]:
+            await ctx.sendmarkdown(f'< {opt} is not a valid entry! >')
+            return
+
+        val, _, timedout = await ctx.promptinput(
+            f'Please enter the new value for {opt}:'
+        )
+        if timedout:
+            return
+
+        confirmed, _, timedout = await ctx.promptconfirm(
+            f'You have entered the following for {server}:\n' +
+            f'{opt}: {val}\n' +
+            '# Please confirm! [y/n]'
+        )
+        if timedout:
+            return
+
+        if confirmed:
+            self.servercfg['servers'][server][opt] = val
             await self.servercfg.save()
             await ctx.sendmarkdown(f'# Edit to {server} has been saved!')
         else:
@@ -126,14 +156,14 @@ class ServerConfig(commands.Cog):
             await ctx.sendmarkdown(f'< Nothing to delete for {server}! >')
             return
 
-        def check(m):
-            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
+        confirmed, _, timedout = await ctx.promptconfirm(
+            '< You are about to delete all configuration options '
+            f'for {server}. >\n# Please confirm! [y/n]'
+        )
+        if timedout:
+            return
 
-        await ctx.sendmarkdown('< You are about to delete all configuration options ' +
-                               f'for {server}. >\n' +
-                               '# Please confirm! [y/n]')
-        r = await self.bot.wait_for('message', check=check, timeout=120)
-        if re.match('(y|yes)', r.content, flags=re.I):
+        if confirmed:
             del self.servercfg['servers'][server]
             await self.servercfg.save()
             await ctx.sendmarkdown(f'# Configurations for {server} have been deleted!')
@@ -141,74 +171,56 @@ class ServerConfig(commands.Cog):
             await ctx.sendmarkdown(f'< Deletion of configurations aborted! >')
 
     @config.command()
-    async def editpaths(self, ctx):
-        """Give the option of editing the various server path configurations!"""
+    async def editopts(self, ctx):
+        """Give the option of editing the various global server configurations!"""
 
-        def check(m):
-            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
+        prompts = [
+            ('serverspath',
+             self.servercfg['serverspath'],
+             'Current path to the directory where all minecraft server '
+             'directories are located is:\n'),
+            ('backupspath',
+             None,
+             self.servercfg['backupspath'],
+             'Current path to the directory where backups are saved is:\n'),
+            ('oldTimer',
+             self.servercfg['oldTimer'],
+             'Current maximum age for backups (in minutes) is:\n')
+        ]
 
-        if 'serverspath' not in self.servercfg:
-            self.servercfg['serverspath'] = 'NONE'
-            await self.servercfg.save()
-        await ctx.sendmarkdown('Current path for directory, where all minecraft servers'
-                               'are located is:\n' + self.servercfg['serverspath'])
-        r, _, timedout = await ctx.promptconfirm('Would you like to change this path?')
-        if timedout:
-            return
-        if r:
-            newpath, _, timedout = await ctx.promptinput('Please enter the new path now!\n'
-                                                         '(it needs to be the full path)')
+        changes = []
+
+        for opt, val, prompt in prompts:
+            new, _, timedout = await ctx.promptconfirm_or_input(
+                f'{prompt}{val}\n'
+                '< If you\'d like to change this, please enter the new'
+                ' value now, otherwise just reply with "no" >',
+                confirm=False
+            )
             if timedout:
                 return
-            if newpath:
-                self.servercfg['serverspath'] = newpath
-                await self.servercfg.save()
-                await ctx.sendmarkdown('Saved new path for minecraft servers directory!')
 
-        if 'backupspath' not in self.servercfg:
-            self.servercfg['backupspath'] = 'NONE'
-        await ctx.sendmarkdown('Current path for directory, where backups are saved is:\n' +
-                               self.servercfg['backupspath'])
-        r, _, timedout = await ctx.promptconfirm('Would you like to change this path?')
-        if timedout:
-            return
-        if r:
-            newpath, _, timedout = await ctx.promptinput('Please enter the new path now!\n'
-                                                         '(it needs to be the full path)')
+            if new:
+                changes.append((opt, val, new))
+
+        if changes:
+            confirmed, _, timedout = await ctx.promptconfirm(
+                '# You have changed the following values:\n' +
+                '\n'.join([f'{opt}: {old} to {new}' for opt, old, new in changes]) +
+                '# Please confirm! [y/n]'
+            )
             if timedout:
                 return
-            if newpath:
-                self.servercfg['backupspath'] = newpath
-                await self.servercfg.save()
-                await ctx.sendmarkdown('Saved new path for minecraft backups directory!')
 
-    @config.command(aliases=['editbackuptimer'])
-    async def editmaxbackupage(self, ctx):
-        """Give the option of changing the maximum age for backups!
+            if confirmed:
+                for opt, _, new in changes:
+                    self.servercfg[opt] = new
+                else:
+                    await self.servercfg.save()
+                    await ctx.sendmarkdown('# New values saved!')
+                    return
 
-        Maximum age is defined in minutes.
-        """
-
-        def check(m):
-            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
-
-        if 'oldTimer' not in self.servercfg:
-            self.servercfg['oldTimer'] = 1440
-            await self.servercfg.save()
-        await ctx.sendmarkdown('Current maximum age for backups is:\n' +
-                               self.servercfg['oldTimer'])
-        r, _, timedout = await ctx.promptconfirm('Would you like to change it?')
-        if timedout:
-            return
-        if r:
-            newage, _, timedout = await ctx.promptinput('Please enter the new maximum backup age now!'
-                                                        '\n(Age needs to be in minutes)')
-            if timedout:
-                return
-            if newage:
-                self.servercfg['oldTimer'] = newage
-                await self.servercfg.save()
-                await ctx.sendmarkdown('Saved new maximum backup age!')
+        await ctx.sendmarkdown('< Edits have been discarded! >')
 
 
 def setup(bot):
