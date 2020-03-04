@@ -9,7 +9,7 @@ log = logging.getLogger('charfred')
 formats = {
     'MSG': '[**{}**] {}: {}',
     'STF': '**{}**: {}',
-    'DTH': '[**{}**] {} {}',
+    'DTH': '[**{}**] {}',
     'ME': '[**{}**] {}: {}',
     'SAY': '[**{}**] {}: {}',
     'SYS': '{}'
@@ -24,7 +24,6 @@ class ChatRelay(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.loop = bot.loop
-        self.server = None
         self.inqueue = asyncio.Queue(maxsize=64, loop=self.loop)
         self.clients = {}
         self.inqueue_worker_task = None
@@ -36,25 +35,25 @@ class ChatRelay(commands.Cog):
         if 'client_to_ch' not in self.relaycfg:
             self.relaycfg['client_to_ch'] = {}
             self.relaycfg._save()
+        self.server = bot.get_cog('StreamServer')
+        if self.server:
+            self.server.register_handshake('ChatRelay', self.connection_handler)
 
     def cog_unload(self):
-        if self.server:
-            log.info('CR: Closing relay server.')
-            self.server.close()
-            if self.inqueue_worker_task:
-                self.inqueue_worker_task.cancel()
-            if self.clients:
-                for client in self.clients.values():
-                    try:
-                        client['workers'][0].cancel()
-                        client['workers'][1].cancel()
-                    except KeyError:
-                        pass
-            self.loop.create_task(self.server.wait_closed())
+        if self.inqueue_worker_task:
+            self.inqueue_worker_task.cancel()
+        if self.clients:
+            for client in self.clients.values():
+                try:
+                    client['workers'][0].cancel()
+                    client['workers'][1].cancel()
+                except KeyError:
+                    pass
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if self.server is None:  # Don't even do anything if the server isn't running.
+        if (self.server is None) or (not self.server.running):
+            # Don't even do anything if the server isn't running.
             return
 
         if message.author.bot or (message.guild is None):
@@ -96,10 +95,6 @@ class ChatRelay(commands.Cog):
         """
 
         info = ['# Chat Relay Status:']
-        if self.server and self.server.sockets:
-            info.append('\n# Relay server is online.\n')
-        else:
-            info.append('\n< Relay server is offline! >\n')
         if self.clients:
             info.append('\n# Currently connected clients:')
             for client in self.clients:
@@ -165,7 +160,7 @@ class ChatRelay(commands.Cog):
 
     async def connection_handler(self, reader, writer):
         peer = str(writer.get_extra_info("peername"))
-        log.info(f'CR-Connection: New connection established with {peer}!')
+        log.info(f'CR-Connection: Connection {peer} recieved!')
         handshake = await reader.readline()
         if not handshake:
             log.warning(f'CR-Connection: No handshake from {peer} recieved!'
@@ -314,27 +309,22 @@ class ChatRelay(commands.Cog):
         chat recieved from clients will just be dropped!
         """
 
-        if self.server:
-            log.warning('CR: Server already established!')
-            await ctx.sendmarkdown('> Relay server already running!')
-            return
-        self._handle_inqueue_worker()
-        self.server = await asyncio.start_server(self.connection_handler, '127.0.0.1', port,
-                                                 loop=self.loop)
-        log.info('CR: Server started!')
-        await ctx.sendmarkdown('# Relay server started.')
+        if not self.server:
+            self.server = bot.get_cog('StreamServer')
+        try:
+            self.server.register_handshake('ChatRelay', self.connection_handler)
+        except AttributeError:
+            await ctx.sendmarkdown('< Relay could not be established!'
+                                   ' StreamServer is unavailable. >')
+        else:
+            self._handle_inqueue_worker()
+            await ctx.sendmarkdown('# Relay server running.')
 
     @chatrelay.command(aliases=['stop'])
     @permission_node(f'{__name__}.init')
     async def close(self, ctx):
-        """This closes the relay server, disconnecting all clients.
-        """
+        """This disconnects all clients."""
 
-        if not self.server:
-            log.info('CR: No server to be closed.')
-            await ctx.sendmarkdown('> No relay server to be closed.')
-            return
-        self.server.close()
         self._handle_inqueue_worker(cancel=True)
         if self.clients:
             for client in self.clients.values():
@@ -343,10 +333,7 @@ class ChatRelay(commands.Cog):
                     client['workers'][1].cancel()
                 except KeyError:
                     pass
-        await self.server.wait_closed()
-        log.info('CR: Server closed!')
-        self.server = None
-        await ctx.sendmarkdown('# Relay server closed, all clients disconnected!')
+        await ctx.sendmarkdown('# All clients disconnected!')
 
     @chatrelay.command(aliases=['listen'])
     @permission_node(f'{__name__}.register')
