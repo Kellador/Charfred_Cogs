@@ -323,8 +323,22 @@ class ChatRelay(commands.Cog):
     @chatrelay.command(aliases=['stop'])
     @permission_node(f'{__name__}.init')
     async def close(self, ctx):
-        """This disconnects all clients."""
+        """This unregisters the connection handler from the server,
+        and disconnects all clients, effectively shutting down the
+        chat relay.
 
+        New connections can still be attempted but they will be dropped
+        by the server.
+        """
+
+        if self.server:
+            self.server.unregister_handshake('ChatRelay')
+        else:
+            await ctx.sendmarkdown(
+                '< Could not unregister the connection handler.'
+                ' StreamServer unavailable. >'
+            )
+            return
         self._handle_inqueue_worker(cancel=True)
         if self.clients:
             for client in self.clients.values():
