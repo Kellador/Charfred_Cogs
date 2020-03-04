@@ -139,6 +139,8 @@ class ChatRelay(commands.Cog):
                     log.warning(f'CR-Incoming: Incoming queue full, message dropped!')
         except CancelledError:
             raise
+        except ConnectionResetError:
+            log.info(f'CR-Incoming: Connection reset by {client}!')
         finally:
             log.info(f'CR-Incoming: Worker for {client} exited.')
 
@@ -265,6 +267,42 @@ class ChatRelay(commands.Cog):
         finally:
             log.info('CR-Inqueue: Worker exited.')
 
+    def _inqueueDone(self, future):
+        try:
+            exc = future.exception()
+        except CancelledError:
+            pass
+        else:
+            if exc:
+                log.error('CR-Inqueue-Future: Exception occured!')
+                log.error(exc)
+                log.info('CR-Inqueue-Future: Restarting inqueue worker...')
+                self._handle_inqueue_worker()
+
+    def _handle_inqueue_worker(self, cancel=False):
+        """Starts or cancels the inqueue_worker task
+        and attaches relevant callbacks.
+        """
+
+        task = self.inqueue_worker_task
+        if task:
+            if not task.done():
+                if cancel:
+                    log.debug('Cancelling inqueue_worker_task.')
+                    task.cancel()
+                    return
+                else:  # Task still running and no request to cancel, just proceed.
+                    log.debug('Inqueue worker still running, no need to restart.')
+                    return
+
+            if cancel:  # We'll only get here if the task is done.
+                self.inqueue_worker_task = None
+                return
+
+        # If the task does not exist, or is done and we don't want to cancel:
+        self.inqueue_worker_task = self.loop.create_task(self.inqueue_worker())
+        self.inqueue_worker_task.add_done_callback(self._inqueueDone)
+
     @chatrelay.command(aliases=['start', 'init'])
     @permission_node(f'{__name__}.init')
     async def initialize(self, ctx, port):
@@ -280,7 +318,7 @@ class ChatRelay(commands.Cog):
             log.warning('CR: Server already established!')
             await ctx.sendmarkdown('> Relay server already running!')
             return
-        self.inqueue_worker_task = self.loop.create_task(self.inqueue_worker())
+        self._handle_inqueue_worker()
         self.server = await asyncio.start_server(self.connection_handler, '127.0.0.1', port,
                                                  loop=self.loop)
         log.info('CR: Server started!')
@@ -297,8 +335,7 @@ class ChatRelay(commands.Cog):
             await ctx.sendmarkdown('> No relay server to be closed.')
             return
         self.server.close()
-        if self.inqueue_worker_task:
-            self.inqueue_worker_task.cancel()
+        self._handle_inqueue_worker(cancel=True)
         if self.clients:
             for client in self.clients.values():
                 try:
