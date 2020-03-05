@@ -300,7 +300,7 @@ class ChatRelay(commands.Cog):
 
     @chatrelay.command(aliases=['start', 'init'])
     @permission_node(f'{__name__}.init')
-    async def initialize(self, ctx, port):
+    async def initialize(self, ctx):
         """This initializes the relay server on the given port,
         allowing connections from Minecraft servers to be established.
 
