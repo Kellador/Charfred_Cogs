@@ -113,7 +113,11 @@ class Customs(commands.Cog):
         log.info(f'Required: {str(minRole)}; User has: {str(roles[-1])}')
 
         if args:
-            _cmd = _cmd.format(*args)
+            try:
+                _cmd = _cmd.format(*args)
+            except IndexError:
+                await ctx.sendmarkdown(f'< Incorrect number of arguments given! Abort! >')
+                return
         msg.append(f'# Executing \"{_cmd}\"...')
 
         if re.match('^all$', server, flags=re.I):
