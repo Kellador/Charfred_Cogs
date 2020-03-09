@@ -442,11 +442,12 @@ class ChatRelay(commands.Cog):
 
         out = []
         for k, msgtype in self.cfg.types.items():
-            prefix, suffix = ('< ', ' >') if msgtype.sendable else ('  ', '')
-            out.append(f'{prefix}{msgtype.formatstr}{suffix}')
+            out.append(f'"{k}":\n')
+            for k, v in msgtype._asdict().items():
+                out.append(f'  {k}: {v}')
         await ctx.sendmarkdown('# Registered formats:\n' +
                                '\n'.join(out) +
-                               '\n> Formats highlighted in yellow are not sendable.')
+                               '\n> Some of the entries on each ')
 
     @formatting.command(name='add', aliases=['modify'])
     @permission_node(f'{__name__}.format')
@@ -460,11 +461,7 @@ class ChatRelay(commands.Cog):
 
         self.cfg.types.add(msgtype, formatstring, sendable)
         await self.cfg.save()
-        await ctx.sendmarkdown(
-            f'{msgtype} has been saved with the following entries:' +
-            '\n'.join([f'{k}: {v}' for k, v in self.cfg.types[msgtype]._asdict()]) +
-            '\n> Some of these entries are auto-generated.'
-        )
+        await ctx.sendmarkdown(f'# {msgtype} has been saved.')
 
     @formatting.command(name='remove')
     @permission_node(f'{__name__}.format')
