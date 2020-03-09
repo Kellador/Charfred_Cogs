@@ -2,23 +2,32 @@ import logging
 import asyncio
 from concurrent.futures import CancelledError
 from discord.ext import commands
-from utils import Config, permission_node
+from utils import permission_node
+from .utils import RelayConfig
 
 log = logging.getLogger('charfred')
-
-formats = {
-    'MSG': '[**{}**] {}: {}',
-    'STF': '**{}**: {}',
-    'DTH': '[**{}**] {}',
-    'ME': '[**{}**] {}: {}',
-    'SAY': '[**{}**] {}: {}',
-    'JNLV': '[**{}**] {}',
-    'SYS': '{}'
-}
 
 
 def escape(string):
     return string.strip().replace('\n', '\\n').replace('::', ':\:').replace('::', ':\:')
+
+
+defaulttypes = {
+    'MSG': {
+        'prefix': 'MSG',
+        'formatstr': '[**{client}**] {user}: {content}',
+        'sendable': True,
+        'formatfields': ['client', 'user', 'content'],
+        'encoding': 'MSG::{client}::{user}::{content}::\n'
+    },
+    'SYS': {
+        'prefix': 'SYS',
+        'formatstr': '{content}',
+        'sendable': False,
+        'formatfields': [],
+        'encoding': 'SYS::{content}::\n'
+    }
+}
 
 
 class ChatRelay(commands.Cog):
@@ -28,14 +37,8 @@ class ChatRelay(commands.Cog):
         self.inqueue = asyncio.Queue(maxsize=64, loop=self.loop)
         self.clients = {}
         self.inqueue_worker_task = None
-        self.relaycfg = Config(f'{bot.dir}/configs/chatrelaycfg.toml',
-                               load=True, loop=self.loop)
-        if 'ch_to_clients' not in self.relaycfg:
-            self.relaycfg['ch_to_clients'] = {}
-            self.relaycfg._save()
-        if 'client_to_ch' not in self.relaycfg:
-            self.relaycfg['client_to_ch'] = {}
-            self.relaycfg._save()
+        self.cfg = RelayConfig(f'{bot.dir}/configs/chatrelaycfg.toml',
+                               initial=defaulttypes, load=True, loop=self.loop)
         self.server = bot.get_cog('StreamServer')
         if self.server:
             self.server.register_handshake('ChatRelay', self.connection_handler)
@@ -61,7 +64,7 @@ class ChatRelay(commands.Cog):
             return
 
         ch_id = str(message.channel.id)
-        if message.content and (ch_id in self.relaycfg['ch_to_clients']):
+        if message.content and (ch_id in self.cfg.ch_clients):
 
             # Check whether the message is a command, as determined
             # by having a valid prefix, and don't proceed if it is.
@@ -77,11 +80,25 @@ class ChatRelay(commands.Cog):
                     # If we get here, then the prefixes are borked.
                     raise
 
-            content = f'MSG::Discord::{escape(message.author.display_name)}:' \
+            try:
+                restriction = self.cfg.restricted[ch_id]
+            except KeyError:
+                out = f'MSG::Discord::{escape(message.author.display_name)}:' \
                       f':{escape(message.clean_content)}::\n'
-            for client in self.relaycfg['ch_to_clients'][ch_id]:
+            else:
+                msgtype = self.cfg.types[restriction]
+                if msgtype.sendable:
+                    out = msgtype.encoding.format(
+                        client='Discord',
+                        user=escape(message.author.display_name),
+                        content=escape(message.clean_content)
+                    )
+                else:
+                    return
+
+            for client in self.cfg.ch_clients:
                 try:
-                    self.clients[client]['queue'].put_nowait((5, content))
+                    self.clients[client]['queue'].put_nowait((5, out))
                 except KeyError:
                     pass
                 except asyncio.QueueFull:
@@ -100,11 +117,16 @@ class ChatRelay(commands.Cog):
             info.append('\n# Currently connected clients:')
             for client in self.clients:
                 info.append(f'- {client}')
-        if self.relaycfg['ch_to_clients']:
+        if self.cfg:
             info.append('\n# Relay configuration:')
-            for channel_id, clients in self.relaycfg['ch_to_clients'].items():
+            for channel_id, clients in self.cfg.ch_clients.items():
                 channel = self.bot.get_channel(int(channel_id))
-                info.append(f'{channel.name if channel else channel_id}:')
+                try:
+                    res = self.cfg.restricted[channel_id]
+                except KeyError:
+                    info.append(f'{channel.name if channel else channel_id}:')
+                else:
+                    info.append(f'{channel.name if channel else channel_id} - Restricted to {res}:')
                 if clients:
                     for client in clients:
                         info.append(f'- {client}')
@@ -155,6 +177,8 @@ class ChatRelay(commands.Cog):
                     writer.write(data)
                     await writer.drain()
         except CancelledError:
+            writer.close()
+            await writer.wait_closed()
             raise
         finally:
             log.info(f'CR-Outgoing: Worker for {client} exited.')
@@ -226,12 +250,15 @@ class ChatRelay(commands.Cog):
 
                 # Check if the data has a valid format.
                 _data = data.split('::')
-                if _data[0] not in formats:
+
+                try:
+                    msgtype = self.cfg.types[_data[0]]
+                except KeyError:
                     log.debug(f'CR-Inqueue: Data from {client} with invalid format: {data}')
                     continue
 
-                # If we get here, then the format is valid and we can relay to other clients.
-                if _data[0] != 'SYS':
+                # If we get here, then the format represents a valid type.
+                if msgtype.sendable:
                     for other in self.clients:
                         if other == client:
                             continue
@@ -242,19 +269,23 @@ class ChatRelay(commands.Cog):
                         except asyncio.QueueFull:
                             pass
 
-                # Check if we have a channel to send this message to.
-                if client not in self.relaycfg['client_to_ch']:
+                # Check if we have a channel to post this message to.
+                try:
+                    channel = self.bot.get_channel(int(self.cfg.client_ch[client]))
+                except KeyError:
                     log.debug(f'CR-Inqueue: No channel for: "{client} : {data}", dropping!')
                     continue
 
-                # If we get here, we have a channel and can process according to format map.
-                channel = self.bot.get_channel(int(self.relaycfg['client_to_ch'][client]))
+                # If we get here, we might have a channel and can process according to format map.
                 if not channel:
                     log.warning(f'CR-Inqueue: {_data[0]} message from {client} could not be sent.'
                                 ' Registered channel does not exist!')
                     continue
+
                 try:
-                    await channel.send(formats[_data[0]].format(*_data[1:]))
+                    await channel.send(
+                        msgtype.formatstr.format(dict(zip(msgtype.formatfields, _data[1:])))
+                    )
                 except IndexError as e:
                     log.debug(f'{e}: {data}')
                     pass
@@ -311,7 +342,7 @@ class ChatRelay(commands.Cog):
         """
 
         if not self.server:
-            self.server = bot.get_cog('StreamServer')
+            self.server = self.bot.get_cog('StreamServer')
         try:
             self.server.register_handshake('ChatRelay', self.connection_handler)
         except AttributeError:
@@ -369,23 +400,13 @@ class ChatRelay(commands.Cog):
                                    ' when the client eventually connects. >')
         log.info(f'CR: Trying to register {ctx.channel.name} for {client}.')
 
-        if client in self.relaycfg['client_to_ch'] and self.relaycfg['client_to_ch'][client]:
-            channel = self.bot.get_channel(int(self.relaycfg['client_to_ch'][client]))
-            if channel == ctx.channel:
-                await ctx.sendmarkdown(f'> {client} is already registered with this channel!')
-            else:
-                await ctx.sendmarkdown(f'< {client} is already registered with {channel.name}! >\n'
-                                       '> A client can only be registered to one channel.\n'
-                                       '> Please unregister the other channel first!')
+        if client in self.cfg.client_ch:
+            await ctx.sendmarkdown('< Client is already registered to a channel! >')
             return
-        else:
-            self.relaycfg['client_to_ch'][client] = channel_id
-            if channel_id in self.relaycfg['ch_to_clients']:
-                self.relaycfg['ch_to_clients'][channel_id].append(client)
-            else:
-                self.relaycfg['ch_to_clients'][channel_id] = [client]
 
-        await self.relaycfg.save()
+        self.cfg.client_ch[client] = channel_id
+
+        await self.cfg.save()
         await ctx.sendmarkdown(f'# {ctx.channel.name} is now registered for'
                                f' recieving chat from, and sending chat to {client}.')
 
@@ -395,34 +416,133 @@ class ChatRelay(commands.Cog):
         """Unregisters a channel from recieving chat from a given
         client or sending chat to that client.
 
-        The channel you run this in will be the unregistered channel.
+        Since a client can only be registered to one channel,
+        it does not matter where you execute this command.
 
         You can get a list of clients by just running 'chatrelay'
         without a subcommand.
         """
 
-        channel_id = str(ctx.channel.id)
-        log.info(f'CR: Trying to unregister {ctx.channel.name} for {client}.')
+        log.info(f'CR: Trying to unregister {client}.')
 
-        if client in self.relaycfg['client_to_ch']:
-            if self.relaycfg['client_to_ch'][client] == channel_id:
-                del self.relaycfg['client_to_ch'][client]
-            else:
-                await ctx.sendmarkdown(f'< {client} is not registered for this channel! >')
-                return
-
-            try:
-                self.relaycfg['ch_to_clients'][channel_id].remove(client)
-            except ValueError:
-                log.critical(f'CR: Relay mapping inconsistency detected!')
-                raise
-            else:
-                await ctx.sendmarkdown('# This channel will no longer send chat to'
-                                       f' or recieve chat from {client}!')
-            finally:
-                await self.relaycfg.save()
-        else:
+        if client not in self.cfg.client_ch:
             await ctx.sendmarkdown(f'> {client} is not registered with any channel.')
+            return
+
+        del self.cfg.client_ch[client]
+        await self.cfg.save()
+        await ctx.sendmarkdown(f'# {client} has been unregistered!')
+
+    @chatrelay.group(invoke_without_command=True)
+    @permission_node(f'{__name__}.register')
+    async def formatting(self, ctx):
+        """Returns the list of available message types and their
+        formatting strings and whether or not they're restricted.
+        """
+
+        out = []
+        for k, msgtype in self.cfg.types.items():
+            prefix, suffix = ('< ', ' >') if msgtype.restricted else ('  ', '')
+            if not msgtype.sendable:
+                prefix, suffix = ('> ', '')
+            out.append(f'{prefix}{msgtype.formatstr}{suffix}')
+        await ctx.sendmarkdown('# Registered formats:\n' +
+                               '\n'.join(out) +
+                               '\n> Formats highlighted in yellow are restricted,'
+                               '\n> (Meaning they can only be sent and recieved by'
+                               ' channels specifically set to do so)'
+                               '\n> and those listed in grey are not sendable.')
+
+    @formatting.command(name='add', aliases=['modify'])
+    @permission_node(f'{__name__}.format')
+    async def _add(self, ctx, msgtype: str, formatstring: str, sendable: bool=True):
+        """Adds a new, or modifies an existing message type, with a format string and
+        sets if it is a sendable message type or not.
+
+        'sendable' means that it can be sent to clients, either through relay from
+        one client to all others, or by being sent from Discord.
+        """
+
+        self.cfg.types.add(msgtype, formatstring, sendable)
+        await self.cfg.save()
+        await ctx.sendmarkdown(
+            f'{msgtype} has been saved with the following entries:' +
+            '\n'.join([f'{k}: {v}' for k, v in self.cfg.types[msgtype]._asdict()]) +
+            '\n> Some of these entries are auto-generated.'
+        )
+
+    @formatting.command(name='remove')
+    @permission_node(f'{__name__}.format')
+    async def _remove(self, ctx, msgtype: str):
+        """Removes a message type and associated format string."""
+
+        if msgtype in ('MSG', 'SYS'):
+            await ctx.sendmarkdown(f'< Base type {msgtype} cannot be removed,'
+                                   ' only modified! >')
+            return
+
+        try:
+            del self.cfg.types[msgtype]
+        except KeyError:
+            await ctx.sendmarkdown(f'> {msgtype} was not registered.')
+        else:
+            await ctx.sendmarkdown(f'# {msgtype} removed!')
+            await self.cfg.save()
+
+    @chatrelay.command()
+    @permission_node(f'{__name__}.register')
+    async def restrict(self, ctx, msgtype: str):
+        """Restricts a channel to only send and recieve a given
+        type of message.
+
+        The channel you run this in will be the restricted channel.
+
+        A channel can only be restricted to one type of message, so this
+        will override previous restrictions if they exist!
+
+        You can get a list of message types using 'chatrelay formatting'.
+        """
+
+        channel_id = str(ctx.channel.id)
+        if msgtype not in self.cfg.types:
+            await ctx.sendmarkdown(f'< {msgtype} unknown! >')
+            return
+        if channel_id not in self.cfg.ch_clients:
+            await ctx.sendmarkdown('< This channel is not yet registered for '
+                                   'any client! Cannot restrict. >')
+            return
+
+        log.info(f'Restricting {ctx.channel.name} to {msgtype}.')
+
+        self.cfg.restricted[channel_id] = msgtype
+        await self.cfg.save()
+        await ctx.sendmarkdown('# This channel is now restricted to only send '
+                               f'and recieve {msgtype} messages.\n'
+                               '> All outgoing messages will be converted to this type!')
+
+    @chatrelay.command()
+    @permission_node(f'{__name__}.register')
+    async def unrestrict(self, ctx):
+        """Unrestricts a channel and reverts it to being able to recieve any
+        unrestricted type of message.
+
+        The channel you run this in will be the channel that gets unrestricted.
+
+        Outgoing messages will once again be of type 'MSG', after unrestriction.
+        """
+
+        channel_id = str(ctx.channel.id)
+        if channel_id not in self.cfg.ch_clients:
+            await ctx.sendmarkdown('< This channel is not yet registered for '
+                                   'any client! Cannot unrestrict. >')
+            return
+
+        log.info(f'Unrestricting {ctx.channel.name}.')
+
+        self.cfg.restricted[channel_id] = ''
+        await self.cfg.save()
+        await ctx.sendmarkdown('# This channel is now unrestricted and can recieve '
+                               'all unrestricted types of messages.')
 
 
 def setup(bot):
