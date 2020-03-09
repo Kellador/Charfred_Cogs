@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import traceback
 from concurrent.futures import CancelledError
 from discord.ext import commands
 from utils import permission_node
@@ -303,6 +304,7 @@ class ChatRelay(commands.Cog):
             if exc:
                 log.error('CR-Inqueue-Future: Exception occured!')
                 log.error(exc)
+                log.error(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
                 log.info('CR-Inqueue-Future: Restarting inqueue worker...')
                 self._handle_inqueue_worker()
 
