@@ -179,7 +179,6 @@ class ChatRelay(commands.Cog):
                     await writer.drain()
         except CancelledError:
             writer.close()
-            await writer.wait_closed()
             raise
         finally:
             log.info(f'CR-Outgoing: Worker for {client} exited.')
@@ -285,7 +284,7 @@ class ChatRelay(commands.Cog):
 
                 try:
                     await channel.send(
-                        msgtype.formatstr.format(dict(zip(msgtype.formatfields, _data[1:])))
+                        msgtype.formatstr.format(**dict(zip(msgtype.formatfields, _data[1:])))
                     )
                 except IndexError as e:
                     log.debug(f'{e}: {data}')
@@ -303,7 +302,6 @@ class ChatRelay(commands.Cog):
         else:
             if exc:
                 log.error('CR-Inqueue-Future: Exception occured!')
-                log.error(exc)
                 log.error(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
                 log.info('CR-Inqueue-Future: Restarting inqueue worker...')
                 self._handle_inqueue_worker()
