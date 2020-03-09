@@ -65,8 +65,8 @@ class RelayConfig(Config):
 
     def __init__(self, cfgfile, initial={}, **opts):
         default = {
-            'types': TypeMapping(initial),
-            'routing': InvertableMapping({}),
+            'types': initial,
+            'routing': {},
             'restricted': {}
         }
         super().__init__(cfgfile, default=default, **opts)
