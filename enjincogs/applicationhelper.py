@@ -45,14 +45,7 @@ class ApplicationHelper(commands.Cog):
         if self.watchdogfuture:
             self.watchdogfuture[1].set()
 
-    @commands.group(aliases=['enjinapps', 'app'], invoke_without_command=True)
-    @permission_node(f'{__name__}.enjinapps')
-    async def apps(self, ctx):
-        """Enjin Application commands.
-
-        Gives some enjin login status information, when no subcommand is given.
-        """
-
+    def _update_self(self):
         if hasattr(self.bot, 'enjinsession'):
             self.enjinsession = self.bot.enjinsession
         else:
@@ -61,6 +54,16 @@ class ApplicationHelper(commands.Cog):
             self.enjinlogin = self.bot.enjinlogin
         else:
             self.enjinlogin = None
+
+    @commands.group(aliases=['enjinapps', 'app'], invoke_without_command=True)
+    @permission_node(f'{__name__}.enjinapps')
+    async def apps(self, ctx):
+        """Enjin Application commands.
+
+        Gives some enjin login status information, when no subcommand is given.
+        """
+
+        self._update_self()
 
         if not self.enjinappcfg:
             await ctx.sendmarkdown('< No application configuration available! >')
@@ -313,6 +316,8 @@ class ApplicationHelper(commands.Cog):
         Checks for new applications every 5 minutes,
         and reports the number of open applications at that time.
         """
+
+        self._update_self()
 
         if self.watchdogfuture:
             if not self.watchdogfuture[0].done():
