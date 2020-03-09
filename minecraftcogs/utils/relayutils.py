@@ -6,7 +6,7 @@ from utils import Config, InvertableMapping
 log = logging.getLogger('charfred')
 
 MessageType = namedtuple('MessageType', [
-    'prefix', 'formatstr', 'formatfields', 'restricted', 'sendable'
+    'prefix', 'formatstr', 'formatfields', 'sendable'
 ])
 
 fieldspat = re.compile('(?<={)\w*(?=})')
@@ -49,7 +49,7 @@ class TypeMapping(MutableMapping):
     def add(self, prefix, formatstr, restricted=False, sendable=True):
         formatfields = fieldspat.findall(formatstr)
         self.store[prefix] = MessageType(prefix, formatstr, formatfields,
-                                         restricted, sendable)
+                                         sendable)
 
 
 class RelayConfig(Config):
