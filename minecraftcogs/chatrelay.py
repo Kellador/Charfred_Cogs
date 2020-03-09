@@ -25,7 +25,7 @@ defaulttypes = {
         'prefix': 'SYS',
         'formatstr': '{content}',
         'sendable': False,
-        'formatfields': [],
+        'formatfields': ['content'],
         'encoding': 'SYS::{content}::\n'
     }
 }
@@ -97,7 +97,7 @@ class ChatRelay(commands.Cog):
                 else:
                     return
 
-            for client in self.cfg.ch_clients:
+            for client in self.cfg.ch_clients[ch_id]:
                 try:
                     self.clients[client]['queue'].put_nowait((5, out))
                 except KeyError:
@@ -442,16 +442,11 @@ class ChatRelay(commands.Cog):
 
         out = []
         for k, msgtype in self.cfg.types.items():
-            prefix, suffix = ('< ', ' >') if msgtype.restricted else ('  ', '')
-            if not msgtype.sendable:
-                prefix, suffix = ('> ', '')
+            prefix, suffix = ('< ', ' >') if msgtype.sendable else ('  ', '')
             out.append(f'{prefix}{msgtype.formatstr}{suffix}')
         await ctx.sendmarkdown('# Registered formats:\n' +
                                '\n'.join(out) +
-                               '\n> Formats highlighted in yellow are restricted,'
-                               '\n> (Meaning they can only be sent and recieved by'
-                               ' channels specifically set to do so)'
-                               '\n> and those listed in grey are not sendable.')
+                               '\n> Formats highlighted in yellow are not sendable.')
 
     @formatting.command(name='add', aliases=['modify'])
     @permission_node(f'{__name__}.format')
