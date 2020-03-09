@@ -435,24 +435,23 @@ class ChatRelay(commands.Cog):
 
     @chatrelay.group(invoke_without_command=True)
     @permission_node(f'{__name__}.register')
-    async def formatting(self, ctx):
-        """Returns the list of available message types and their
-        formatting strings and whether or not they're restricted.
+    async def msgtypes(self, ctx):
+        """Returns the list of available message types.
         """
 
         out = []
         for k, msgtype in self.cfg.types.items():
-            out.append(f'"{k}":\n')
+            out.append(f'"{k}":')
             for k, v in msgtype._asdict().items():
                 out.append(f'  {k}: {v}')
-        await ctx.sendmarkdown('# Registered formats:\n' +
+        await ctx.sendmarkdown('# Registered message types:\n' +
                                '\n'.join(out) +
-                               '\n> Some of the entries on each ')
+                               '\n> Some of the fields are auto-generated.')
 
-    @formatting.command(name='add', aliases=['modify'])
-    @permission_node(f'{__name__}.format')
+    @msgtypes.command(name='add', aliases=['modify'])
+    @permission_node(f'{__name__}.types')
     async def _add(self, ctx, msgtype: str, formatstring: str, sendable: bool=True):
-        """Adds a new, or modifies an existing message type, with a format string and
+        """Adds a new, or modifies an existing, message type, with a format string and
         sets if it is a sendable message type or not.
 
         'sendable' means that it can be sent to clients, either through relay from
@@ -463,10 +462,10 @@ class ChatRelay(commands.Cog):
         await self.cfg.save()
         await ctx.sendmarkdown(f'# {msgtype} has been saved.')
 
-    @formatting.command(name='remove')
-    @permission_node(f'{__name__}.format')
+    @msgtypes.command(name='remove')
+    @permission_node(f'{__name__}.types')
     async def _remove(self, ctx, msgtype: str):
-        """Removes a message type and associated format string."""
+        """Removes a message type."""
 
         if msgtype in ('MSG', 'SYS'):
             await ctx.sendmarkdown(f'< Base type {msgtype} cannot be removed,'
