@@ -45,6 +45,8 @@ class ChatRelay(commands.Cog):
             self.server.register_handshake('ChatRelay', self.connection_handler)
 
     def cog_unload(self):
+        if self.server:
+            self.server.unregister_handshake('ChatRelay')
         if self.inqueue_worker_task:
             self.inqueue_worker_task.cancel()
         if self.clients:
@@ -120,6 +122,13 @@ class ChatRelay(commands.Cog):
         """
 
         info = ['# Chat Relay Status:']
+
+        task = self.inqueue_worker_task
+        if task and not task.done():
+            info.append('\n  Relay is ready!')
+        else:
+            info.append('\n< Relay is offline! >')
+
         if self.clients:
             info.append('\n# Currently connected clients:')
             for client in self.clients:
@@ -136,6 +145,13 @@ class ChatRelay(commands.Cog):
                         info.append('\n')
                 else:
                     info.append('> No clients configured.\n')
+            if self.cfg.typerouting:
+                info.append('\n# Type routes:')
+                for prefix, (channel_id, consume) in self.cfg.typerouting.items():
+                    channel = self.bot.get_channel(int(channel_id))
+                    prefix, suffix = ('< ', ' >') if consume else ('  ', '')
+                    info.append(f'{prefix}{prefix} => '
+                                f'{channel.name if channel else channel_id}{suffix}\n')
         if len(info) == 2:
             info.append('> No clients connected, nothing configured.')
         await ctx.sendmarkdown('\n'.join(info))
@@ -379,7 +395,7 @@ class ChatRelay(commands.Cog):
                                    ' StreamServer is unavailable. >')
         else:
             self._handle_inqueue_worker()
-            await ctx.sendmarkdown('# Relay server running.')
+            await ctx.sendmarkdown('# Relay ready to go.')
 
     @chatrelay.command(aliases=['stop'])
     @permission_node(f'{__name__}.init')
@@ -408,7 +424,7 @@ class ChatRelay(commands.Cog):
                     client['workers'][1].cancel()
                 except KeyError:
                     pass
-        await ctx.sendmarkdown('# All clients disconnected!')
+        await ctx.sendmarkdown('# Relay closed!')
 
     @chatrelay.command(aliases=['listen'])
     @permission_node(f'{__name__}.register')
