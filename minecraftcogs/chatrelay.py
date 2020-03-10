@@ -272,7 +272,7 @@ class ChatRelay(commands.Cog):
 
                 # Check if this is a type registered to a specific channel.
                 try:
-                    ch_id, consume = self.cfg.typerouting[msgtype]
+                    ch_id, consume = self.cfg.typerouting[_data[0]]
                 except KeyError:
                     pass
                 else:
