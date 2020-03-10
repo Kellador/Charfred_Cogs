@@ -540,7 +540,7 @@ class ChatRelay(commands.Cog):
             await ctx.sendmarkdown('< This channel is already registered for regular routing! >')
             return
 
-        self.cfg.typerouting[msgtype] = [channel_id, consume]
+        self.cfg.typerouting[msgtype] = [channel_id, 'True' if consume else '']
         await self.cfg.save()
         await ctx.sendmarkdown(
             f'# This channel is now registered to recieve {msgtype} messages.\n' +
