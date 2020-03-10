@@ -86,6 +86,13 @@ class ChatRelay(commands.Cog):
             except KeyError:
                 out = f'MSG::Discord::{escape(message.author.display_name)}:' \
                       f':{escape(message.clean_content)}::\n'
+                for client in self.cfg.ch_clients[ch_id]:
+                    try:
+                        self.clients[client]['queue'].put_nowait((5, out))
+                    except KeyError:
+                        pass
+                    except asyncio.QueueFull:
+                        pass
             else:
                 msgtype = self.cfg.types[routedtype]
                 if msgtype.sendable:
@@ -96,14 +103,13 @@ class ChatRelay(commands.Cog):
                     )
                 else:
                     return
-
-            for client in self.cfg.ch_clients[ch_id]:
-                try:
-                    self.clients[client]['queue'].put_nowait((5, out))
-                except KeyError:
-                    pass
-                except asyncio.QueueFull:
-                    pass
+                for client in self.clients:
+                    try:
+                        self.clients[client]['queue'].put_nowait((5, out))
+                    except KeyError:
+                        pass
+                    except asyncio.QueueFull:
+                        pass
 
     @commands.group(invoke_without_command=True)
     async def chatrelay(self, ctx):
@@ -500,6 +506,9 @@ class ChatRelay(commands.Cog):
         by registering message types to channels instead of
         clients to channels.
 
+        Please note that channels registered as such will send
+        their outgoing messages to all connected clients.
+
         This command shows a list of all such routes if no
         subcommand is given.
         """
@@ -525,7 +534,7 @@ class ChatRelay(commands.Cog):
         should be consumed by the registered channel;
         By default it is NOT consumed,
         meaning that it will be sent to the channel registered with this command,
-        AND any channels registered to the client that sent the message.
+        AND any channel registered to the client that sent the message.
 
         As with the client to channel registration you can only register one
         channel per message type.
