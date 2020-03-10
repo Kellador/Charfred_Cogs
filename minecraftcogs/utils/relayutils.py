@@ -47,7 +47,7 @@ class TypeMapping(MutableMapping):
     def __delitem__(self, key):
         del self.store[key]
 
-    def add(self, prefix, formatstr, restricted=False, sendable=True):
+    def add(self, prefix, formatstr, sendable):
         formatfields = fieldspat.findall(formatstr)
         encoding = f'{prefix}::'
         for field in formatfields:
@@ -67,7 +67,7 @@ class RelayConfig(Config):
         default = {
             'types': initial,
             'routing': {},
-            'restricted': {}
+            'typerouting': {}
         }
         super().__init__(cfgfile, default=default, **opts)
 
@@ -88,8 +88,16 @@ class RelayConfig(Config):
         return self.store['routing'].inverted
 
     @property
-    def restricted(self):
-        return self.store['restricted']
+    def typerouting(self):
+        return self.store['typerouting']
+
+    @property
+    def type_ch(self):
+        return self.store['typerouting']
+
+    @property
+    def ch_type(self):
+        return self.store['typerouting'].inverted
 
     def as_dict(self):
         _store = {}
@@ -107,6 +115,7 @@ class RelayConfig(Config):
     def _decode(self):
         self.store['types'] = TypeMapping(self.store['types'])
         self.store['routing'] = InvertableMapping(self.store['routing'])
+        self.store['typerouting'] = InvertableMapping(self.store['typerouting'])
 
     def _load(self):
         super()._load()

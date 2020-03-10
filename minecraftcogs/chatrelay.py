@@ -65,7 +65,7 @@ class ChatRelay(commands.Cog):
             return
 
         ch_id = str(message.channel.id)
-        if message.content and (ch_id in self.cfg.ch_clients):
+        if message.content and ((ch_id in self.cfg.ch_clients) or (ch_id in self.cfg.ch_type)):
 
             # Check whether the message is a command, as determined
             # by having a valid prefix, and don't proceed if it is.
@@ -82,12 +82,12 @@ class ChatRelay(commands.Cog):
                     raise
 
             try:
-                restriction = self.cfg.restricted[ch_id]
+                routedtype = self.cfg.ch_type[ch_id][0]
             except KeyError:
                 out = f'MSG::Discord::{escape(message.author.display_name)}:' \
                       f':{escape(message.clean_content)}::\n'
             else:
-                msgtype = self.cfg.types[restriction]
+                msgtype = self.cfg.types[routedtype]
                 if msgtype.sendable:
                     out = msgtype.encoding.format(
                         client='Discord',
@@ -122,12 +122,7 @@ class ChatRelay(commands.Cog):
             info.append('\n# Relay configuration:')
             for channel_id, clients in self.cfg.ch_clients.items():
                 channel = self.bot.get_channel(int(channel_id))
-                try:
-                    res = self.cfg.restricted[channel_id]
-                except KeyError:
-                    info.append(f'{channel.name if channel else channel_id}:')
-                else:
-                    info.append(f'{channel.name if channel else channel_id} - Restricted to {res}:')
+                info.append(f'{channel.name if channel else channel_id}:')
                 if clients:
                     for client in clients:
                         info.append(f'- {client}')
@@ -269,6 +264,25 @@ class ChatRelay(commands.Cog):
                         except asyncio.QueueFull:
                             pass
 
+                # Check if this is a type registered to a specific channel.
+                try:
+                    ch_id, consume = self.cfg.typerouting[msgtype]
+                except KeyError:
+                    pass
+                else:
+                    channel = self.bot.get_channel(int(ch_id))
+                    if channel:
+                        try:
+                            await channel.send(
+                                msgtype.formatstr.format(**dict(zip(msgtype.formatfields, _data[1:])))
+                            )
+                        except IndexError as e:
+                            log.debug(f'{e}: {data}')
+                    else:
+                        log.debug(f'{msgtype} set to be consumed, but channel does not exist!')
+                    if consume:
+                        continue
+
                 # Check if we have a channel to post this message to.
                 try:
                     channel = self.bot.get_channel(int(self.cfg.client_ch[client]))
@@ -288,7 +302,6 @@ class ChatRelay(commands.Cog):
                     )
                 except IndexError as e:
                     log.debug(f'{e}: {data}')
-                    pass
         except CancelledError:
             raise
         finally:
@@ -434,7 +447,7 @@ class ChatRelay(commands.Cog):
         await ctx.sendmarkdown(f'# {client} has been unregistered!')
 
     @chatrelay.group(invoke_without_command=True)
-    @permission_node(f'{__name__}.register')
+    @permission_node(f'{__name__}.types')
     async def msgtypes(self, ctx):
         """Returns the list of available message types.
         """
@@ -449,7 +462,6 @@ class ChatRelay(commands.Cog):
                                '\n> Some of the fields are auto-generated.')
 
     @msgtypes.command(name='add', aliases=['modify'])
-    @permission_node(f'{__name__}.types')
     async def _add(self, ctx, msgtype: str, formatstring: str, sendable: bool=True):
         """Adds a new, or modifies an existing, message type, with a format string and
         sets if it is a sendable message type or not.
@@ -463,7 +475,6 @@ class ChatRelay(commands.Cog):
         await ctx.sendmarkdown(f'# {msgtype} has been saved.')
 
     @msgtypes.command(name='remove')
-    @permission_node(f'{__name__}.types')
     async def _remove(self, ctx, msgtype: str):
         """Removes a message type."""
 
@@ -480,60 +491,77 @@ class ChatRelay(commands.Cog):
             await ctx.sendmarkdown(f'# {msgtype} removed!')
             await self.cfg.save()
 
-    @chatrelay.command()
+    @chatrelay.group(invoke_without_command=True)
     @permission_node(f'{__name__}.register')
-    async def restrict(self, ctx, msgtype: str):
-        """Restricts a channel to only send and recieve a given
-        type of message.
+    async def typeroute(self, ctx):
+        """Type routing commands.
 
-        The channel you run this in will be the restricted channel.
+        Lets you sidestep the 'one client one channel' rule
+        by registering message types to channels instead of
+        clients to channels.
 
-        A channel can only be restricted to one type of message, so this
-        will override previous restrictions if they exist!
-
-        You can get a list of message types using 'chatrelay formatting'.
+        This command shows a list of all such routes if no
+        subcommand is given.
         """
 
-        channel_id = str(ctx.channel.id)
+        if self.cfg.typerouting:
+            out = ['# Type routes:']
+            for prefix, (channel_id, consume) in self.cfg.typerouting.items():
+                channel = self.bot.get_channel(int(channel_id))
+                prefix, suffix = ('< ', ' >') if consume else ('  ', '')
+                out.append(f'{prefix}{prefix} => '
+                           f'{channel.name if channel else channel_id}{suffix}\n')
+            await ctx.sendmarkdown('\n'.join(out))
+        else:
+            await ctx.sendmarkdown(f'> No type routes set up.')
+
+    @typeroute.command(name='register', aliases=['change'])
+    async def _registertyperoute(self, ctx, msgtype: str, consume: bool=False):
+        """Registers a given message type to a channel.
+
+        The channel you run this in will be the channel registered.
+
+        The optional 'consume' parameter sets whether the message type
+        should be consumed by the registered channel;
+        By default it is NOT consumed,
+        meaning that it will be sent to the channel registered with this command,
+        AND any channels registered to the client that sent the message.
+
+        As with the client to channel registration you can only register one
+        channel per message type.
+        """
+
         if msgtype not in self.cfg.types:
-            await ctx.sendmarkdown(f'< {msgtype} unknown! >')
+            await ctx.sendmarkdown(f'< Unknown message type! >')
             return
-        if channel_id not in self.cfg.ch_clients:
-            await ctx.sendmarkdown('< This channel is not yet registered for '
-                                   'any client! Cannot restrict. >')
-            return
-
-        log.info(f'Restricting {ctx.channel.name} to {msgtype}.')
-
-        self.cfg.restricted[channel_id] = msgtype
-        await self.cfg.save()
-        await ctx.sendmarkdown('# This channel is now restricted to only send '
-                               f'and recieve {msgtype} messages.\n'
-                               '> All outgoing messages will be converted to this type!')
-
-    @chatrelay.command()
-    @permission_node(f'{__name__}.register')
-    async def unrestrict(self, ctx):
-        """Unrestricts a channel and reverts it to being able to recieve any
-        unrestricted type of message.
-
-        The channel you run this in will be the channel that gets unrestricted.
-
-        Outgoing messages will once again be of type 'MSG', after unrestriction.
-        """
 
         channel_id = str(ctx.channel.id)
-        if channel_id not in self.cfg.ch_clients:
-            await ctx.sendmarkdown('< This channel is not yet registered for '
-                                   'any client! Cannot unrestrict. >')
+        if channel_id in self.cfg.ch_clients:
+            await ctx.sendmarkdown('< This channel is already registered for regular routing! >')
             return
 
-        log.info(f'Unrestricting {ctx.channel.name}.')
-
-        self.cfg.restricted[channel_id] = ''
+        self.cfg.typerouting[msgtype] = [channel_id, consume]
         await self.cfg.save()
-        await ctx.sendmarkdown('# This channel is now unrestricted and can recieve '
-                               'all unrestricted types of messages.')
+        await ctx.sendmarkdown(
+            f'# This channel is now registered to recieve {msgtype} messages.\n' +
+            '< These messages will be consumed and no longer sent to other channels! >'
+            if consume else ''
+        )
+
+    @typeroute.command(name='unregister')
+    async def _unregistertyperoute(self, ctx, msgtype: str):
+        """Unregisters a given message type from type routing.
+
+        It does not matter where you run this command.
+        """
+
+        try:
+            del self.cfg.typerouting[msgtype]
+        except KeyError:
+            await ctx.sendmarkdown(f'> {msgtype} was not registered for type routing.')
+        else:
+            await self.cfg.save()
+            await ctx.sendmarkdown(f'# {msgtype} has been unregistered from type routing.')
 
 
 def setup(bot):
