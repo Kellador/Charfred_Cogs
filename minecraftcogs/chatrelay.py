@@ -141,17 +141,15 @@ class ChatRelay(commands.Cog):
                 if clients:
                     for client in clients:
                         info.append(f'- {client}')
-                    else:
-                        info.append('\n')
                 else:
-                    info.append('> No clients configured.\n')
+                    info.append('> No clients configured.')
             if self.cfg.typerouting:
                 info.append('\n# Type routes:')
                 for prefix, (channel_id, consume) in self.cfg.typerouting.items():
                     channel = self.bot.get_channel(int(channel_id))
-                    prefix, suffix = ('< ', ' >') if consume else ('  ', '')
-                    info.append(f'{prefix}{prefix} => '
-                                f'{channel.name if channel else channel_id}{suffix}\n')
+                    _prefix, _suffix = ('< ', ' >') if consume else ('  ', '')
+                    info.append(f'{_prefix}{prefix} => '
+                                f'{channel.name if channel else channel_id}{_suffix}\n')
         if len(info) == 2:
             info.append('> No clients connected, nothing configured.')
         await ctx.sendmarkdown('\n'.join(info))
