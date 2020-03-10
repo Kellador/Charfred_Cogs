@@ -255,6 +255,16 @@ class ChatRelay(commands.Cog):
                 try:
                     msgtype = self.cfg.types[_data[0]]
                 except KeyError:
+
+                    try:  # DEBUG: Remove this later!
+                        channel = self.bot.get_channel(int(self.cfg.client_ch[client]))
+                    except KeyError:
+                        log.debug(f'CR-Inqueue: No channel for: "{client} : {data}", dropping!')
+                    if channel:
+                        await channel.send(f'Dropped: {data}')
+                    else:
+                        log.debug('No channel to send dropped data to!')
+
                     log.debug(f'CR-Inqueue: Data from {client} with invalid format: {data}')
                     continue
 
