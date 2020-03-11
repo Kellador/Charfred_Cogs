@@ -613,6 +613,6 @@ class ChatRelay(commands.Cog):
 
 
 def setup(bot):
-    permission_nodes = ['init', 'register']
+    permission_nodes = ['init', 'register', 'cmd']
     bot.register_nodes([f'{__name__}.{node}' for node in permission_nodes])
     bot.add_cog(ChatRelay(bot))
