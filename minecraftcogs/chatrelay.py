@@ -596,6 +596,21 @@ class ChatRelay(commands.Cog):
             await self.cfg.save()
             await ctx.sendmarkdown(f'# {msgtype} has been unregistered from type routing.')
 
+    @chatrelay.command(name='cmd')
+    @permission_node(f'{__name__}.cmd')
+    async def _cmd(self, ctx, *, cmd):
+        """Relays a command to all clients, for testing!"""
+
+        out = f'CMD::{cmd}::\n'
+        for client in self.clients:
+            try:
+                log.debug(f'CR: Sending "{cmd}" to "{client}"...')
+                self.clients[client]['queue'].put_nowait((5, out))
+            except KeyError:
+                pass
+            except asyncio.QueueFull:
+                pass
+
 
 def setup(bot):
     permission_nodes = ['init', 'register']
