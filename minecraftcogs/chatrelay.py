@@ -598,18 +598,24 @@ class ChatRelay(commands.Cog):
 
     @chatrelay.command(name='cmd')
     @permission_node(f'{__name__}.cmd')
-    async def _cmd(self, ctx, *, cmd):
-        """Relays a command to all clients, for testing!"""
+    async def _cmd(self, ctx, client, *, cmd):
+        """Relays a command to the given client.
+
+        You will only get output (if there is any) in a channel
+        that is set to recieve 'CMD' type messages, or in the channel
+        registered with the client you send the command to.
+        """
 
         out = f'CMD::{cmd}::\n'
-        for client in self.clients:
-            try:
-                log.debug(f'CR: Sending "{cmd}" to "{client}"...')
-                self.clients[client]['queue'].put_nowait((5, out))
-            except KeyError:
-                pass
-            except asyncio.QueueFull:
-                pass
+        try:
+            await self.clients[client]['queue'].put((5, out))
+        except KeyError:
+            await ctx.sendmarkdown(f'< "{client}" is either unknown or not connected! >')
+        except AttributeError as exc:
+            log.critical(f'CR: {client} has no queue!')
+            log.critical(''.join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
+        else:
+            log.debug(f'CR: Sent "{cmd}" to "{client}"...')
 
 
 def setup(bot):
