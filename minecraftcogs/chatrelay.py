@@ -269,30 +269,25 @@ class ChatRelay(commands.Cog):
                 try:
                     msgtype = self.cfg.types[_data[0]]
                 except KeyError:
-
-                    try:  # DEBUG: Remove this later!
-                        channel = self.bot.get_channel(int(self.cfg.client_ch[client]))
-                    except KeyError:
-                        log.debug(f'CR-Inqueue: No channel for: "{client} : {data}", dropping!')
-                    if channel:
-                        await channel.send(f'Dropped: {data}')
-                    else:
-                        log.debug('No channel to send dropped data to!')
-
                     log.debug(f'CR-Inqueue: Data from {client} with invalid format: {data}')
                     continue
 
                 # If we get here, then the format represents a valid type.
                 if msgtype.sendable:
-                    for other in self.clients:
-                        if other == client:
-                            continue
-                        try:
-                            self.clients[other]['queue'].put_nowait((5, data))
-                        except KeyError:
-                            pass
-                        except asyncio.QueueFull:
-                            pass
+                    try:
+                        others = self.cfg.ch_clients[self.cfg.client_ch[client]]
+                    except KeyError:
+                        log.debug(f'Could not find others for {client}!')
+                    else:
+                        for other in others:
+                            if other == client:
+                                continue
+                            try:
+                                self.clients[other]['queue'].put_nowait((5, data))
+                            except KeyError:
+                                pass
+                            except asyncio.QueueFull:
+                                pass
 
                 # Check if this is a type registered to a specific channel.
                 try:
