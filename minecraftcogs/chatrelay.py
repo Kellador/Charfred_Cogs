@@ -1,16 +1,13 @@
 import logging
 import asyncio
 import traceback
+import re
 from concurrent.futures import CancelledError
 from discord.ext import commands
 from utils import permission_node
 from .utils import RelayConfig
 
 log = logging.getLogger('charfred')
-
-
-def escape(string):
-    return string.strip().replace('\n', '\\n').replace('::', ':\:').replace('::', ':\:')
 
 
 defaulttypes = {
@@ -29,6 +26,67 @@ defaulttypes = {
         'encoding': 'SYS::{content}::\n'
     }
 }
+
+
+minecraftpat = re.compile('(&[lmnok])(.*?)(&r|$)')
+
+discordpat = re.compile('(\\*\\*|\\*|~~|__|_)(.*?)(\\1)')
+
+
+def _scramble(scramblee):
+    return u'█' * len(scramblee)
+
+
+minecraftreplacements = {
+    '&l': '**',
+    '&m': '~~',
+    '&n': '__',
+    '&o': '*'
+}
+
+discordreplacements = {
+    '**': '&l',
+    '*': '&o',
+    '_': '&o',
+    '__': '&n',
+    '~~': '&m'
+}
+
+
+def _mine_replacer(match):
+    if match.group(1) == '&k':
+        return _scramble(match.group(2)) + ' '
+    else:
+        try:
+            r = minecraftreplacements[match.group(1)]
+        except KeyError:
+            r = ''
+
+        return f'{r}{minecraftpat.sub(_mine_replacer, match.group(2)).strip()}{r} '
+
+
+def _disco_replacer(match):
+    try:
+        r = discordreplacements[match.group(1)]
+    except KeyError:
+        r = ''
+
+    return f'{r}{discordpat.sub(_disco_replacer, match.group(2)).strip()}&r'
+
+
+def convert_to(content, to_discord=True):
+    if to_discord:
+        return minecraftpat.sub(_mine_replacer, content)
+    else:
+        return discordpat.sub(_disco_replacer, content)
+
+
+def escape(string):
+    return string.strip().replace('\n', '\\n').replace('::', ':\:').replace('::', ':\:')
+
+
+def escape_convert(string):
+    return convert_to(escape(string), to_discord=False)
 
 
 class ChatRelay(commands.Cog):
@@ -87,7 +145,7 @@ class ChatRelay(commands.Cog):
                 routedtype = self.cfg.ch_type[ch_id][0]
             except KeyError:
                 out = f'MSG::Discord::{escape(message.author.display_name)}:' \
-                      f':{escape(message.clean_content)}::\n'
+                      f':{escape_convert(message.clean_content)}::\n'
                 for client in self.cfg.ch_clients[ch_id]:
                     try:
                         self.clients[client]['queue'].put_nowait((5, out))
@@ -299,7 +357,8 @@ class ChatRelay(commands.Cog):
                     if channel:
                         try:
                             await channel.send(
-                                msgtype.formatstr.format(**dict(zip(msgtype.formatfields, _data[1:])))
+                                convert_to(msgtype.formatstr.format(
+                                    **dict(zip(msgtype.formatfields, _data[1:]))))
                             )
                         except IndexError as e:
                             log.debug(f'{e}: {data}')
@@ -323,7 +382,8 @@ class ChatRelay(commands.Cog):
 
                 try:
                     await channel.send(
-                        msgtype.formatstr.format(**dict(zip(msgtype.formatfields, _data[1:])))
+                        convert_to(msgtype.formatstr.format(
+                            **dict(zip(msgtype.formatfields, _data[1:]))))
                     )
                 except IndexError as e:
                     log.debug(f'{e}: {data}')
@@ -572,8 +632,8 @@ class ChatRelay(commands.Cog):
         await self.cfg.save()
         await ctx.sendmarkdown(
             f'# This channel is now registered to recieve {msgtype} messages.\n' +
-            '< These messages will be consumed and no longer sent to other channels! >'
-            if consume else ''
+            ('< These messages will be consumed and no longer sent to other channels! >'
+             if consume else '')
         )
 
     @typeroute.command(name='unregister')
