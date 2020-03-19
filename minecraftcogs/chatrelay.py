@@ -30,6 +30,8 @@ defaulttypes = {
 
 minecraftpat = re.compile('(&[lmnok])(.*?)(&r|$)')
 
+unconvertablepat = re.compile('(&[0-9a-fr])')
+
 discordpat = re.compile('(\\*\\*|\\*|~~|__|_)(.*?)(\\1)')
 
 
@@ -76,7 +78,7 @@ def _disco_replacer(match):
 
 def convert_to(content, to_discord=True):
     if to_discord:
-        return minecraftpat.sub(_mine_replacer, content)
+        return unconvertablepat.sub('', minecraftpat.sub(_mine_replacer, content))
     else:
         return discordpat.sub(_disco_replacer, content)
 
