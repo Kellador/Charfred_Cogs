@@ -34,6 +34,8 @@ unconvertablepat = re.compile('(&[0-9a-fr])')
 
 discordpat = re.compile('(\\*\\*|\\*|~~|__|_)(.*?)(\\1)')
 
+emojipat = re.compile('(<.?:)(.*?)(:\d*?>)')
+
 
 def _scramble(scramblee):
     return u'█' * len(scramblee)
@@ -87,8 +89,12 @@ def escape(string):
     return string.strip().replace('\n', '\\n').replace('::', ':\:').replace('::', ':\:')
 
 
-def escape_convert(string):
-    return convert_to(escape(string), to_discord=False)
+def clean_emoji(string):
+    return emojipat.sub(':\g<2>:', string)
+
+
+def clean(string):
+    return convert_to(escape(clean_emoji(string)), to_discord=False)
 
 
 class ChatRelay(commands.Cog):
@@ -147,7 +153,7 @@ class ChatRelay(commands.Cog):
                 routedtype = self.cfg.ch_type[ch_id][0]
             except KeyError:
                 out = f'MSG::Discord::{escape(message.author.display_name)}:' \
-                      f':{escape_convert(message.clean_content)}::\n'
+                      f':{clean(message.clean_content)}::\n'
                 for client in self.cfg.ch_clients[ch_id]:
                     try:
                         self.clients[client]['queue'].put_nowait((5, out))
