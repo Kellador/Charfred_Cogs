@@ -12,7 +12,7 @@ class ServerConfig(commands.Cog):
         self.loop = bot.loop
         self.servercfg = bot.servercfg
 
-    @commands.group(name='serverconfig', invoke_without_command=True)
+    @commands.group(name='serverconfig')
     @permission_node(f'{__name__}.manage')
     async def config(self, ctx):
         """Minecraft server configuration commands."""

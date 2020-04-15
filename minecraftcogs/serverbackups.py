@@ -16,7 +16,7 @@ class ServerBackups(commands.Cog):
         self.loop = bot.loop
         self.servercfg = bot.servercfg
 
-    @commands.group(invoke_without_command=True)
+    @commands.group()
     @permission_node(f'{__name__}.backup')
     async def backup(self, ctx):
         """Minecraft server backup commands."""
@@ -40,7 +40,7 @@ class ServerBackups(commands.Cog):
                                title=f'Backups for {server}', color=Color.blurple())
         await backupsbook.flip()
 
-    @backup.group(invoke_without_command=True)
+    @backup.group()
     @permission_node(f'{__name__}.apply')
     async def apply(self, ctx):
         """Backup application commands."""

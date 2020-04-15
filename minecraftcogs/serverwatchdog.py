@@ -47,6 +47,7 @@ class Watchdog(commands.Cog):
                 await ctx.sendmarkdown(f'# {server} watchdog active!')
 
     @watchdog.command(aliases=['blame'])
+    @permission_node(f'{__name__}.watchdog')
     async def setmention(self, ctx, mentionee: str):
         """Set who to mention for crash notification."""
 
@@ -194,6 +195,7 @@ class Watchdog(commands.Cog):
             await ctx.sendmarkdown('# Watchdog activated!', deletable=False)
 
     @watchdog.command(name='activate', aliases=['start', 'watch'])
+    @permission_node(f'{__name__}.watchdog')
     async def wdstart(self, ctx, *servers: str):
         """Start the process watchdog for a server."""
 
@@ -201,6 +203,7 @@ class Watchdog(commands.Cog):
             await self._wdstart(ctx, server)
 
     @watchdog.command(name='deactivate', aliases=['stop', 'unwatch'])
+    @permission_node(f'{__name__}.watchdog')
     async def wdstop(self, ctx, server: str):
         """Stop the process watchdog for a server."""
 

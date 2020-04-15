@@ -93,6 +93,7 @@ class Quotator(commands.Cog):
             await ctx.send(f'I have quotes from these members:\n ```\n{members}\n```')
 
     @quote.command(aliases=['delete', 'unquote'])
+    @permission_node(f'{__name__}.quote')
     async def remove(self, ctx, member: discord.Member, *, _index: int):
         """Remove a specific quote.
 
@@ -125,6 +126,7 @@ class Quotator(commands.Cog):
             await ctx.send('Sorry lass, I don\'t seem to have heard of this person before.')
 
     @quote.command(name='list')
+    @permission_node(f'{__name__}.quote')
     async def _list(self, ctx, member: discord.Member):
         """List all quotes from a specific user.
 

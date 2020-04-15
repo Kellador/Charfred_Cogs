@@ -114,6 +114,7 @@ class ApplicationHelper(commands.Cog):
         return msg
 
     @apps.command()
+    @permission_node(f'{__name__}.enjinedittemplate')
     async def setmention(self, ctx, mentionee: str):
         """Set who to mention for new app notification."""
 
@@ -132,6 +133,7 @@ class ApplicationHelper(commands.Cog):
             log.warning('Role could not be found, role to mention unchanged.')
 
     @apps.command(name='get')
+    @permission_node(f'{__name__}.enjinapps')
     async def getapp(self, ctx, appid):
         """Retrieves the user entered info for a given application id."""
 
@@ -241,6 +243,7 @@ class ApplicationHelper(commands.Cog):
                                'template via the viewtemplate command.')
 
     @apps.command()
+    @permission_node(f'{__name__}.enjinapps')
     async def viewtemplate(self, ctx, raw: bool = False):
         """Prints the current template."""
 
@@ -274,6 +277,7 @@ class ApplicationHelper(commands.Cog):
             return apps['result']['items']
 
     @apps.command(name='list')
+    @permission_node(f'{__name__}.enjinapps')
     async def _list(self, ctx, type: str = 'open'):
         """Retrieves a condensed list of applications.
 
@@ -296,6 +300,7 @@ class ApplicationHelper(commands.Cog):
         log.info('Applications retrieved and listed!')
 
     @apps.group(invoke_without_command=True)
+    @permission_node(f'{__name__}.enjinapps')
     async def watchdog(self, ctx):
         """Application watchdog commands.
 
@@ -310,6 +315,7 @@ class ApplicationHelper(commands.Cog):
                 await ctx.sendmarkdown('# Application watchdog active!')
 
     @watchdog.command()
+    @permission_node(f'{__name__}.enjinapps')
     async def start(self, ctx):
         """Start application watchdog.
 
@@ -429,6 +435,7 @@ class ApplicationHelper(commands.Cog):
         await ctx.sendmarkdown('# Application watchdog activated!', deletable=False)
 
     @watchdog.command()
+    @permission_node(f'{__name__}.enjinapps')
     async def stop(self, ctx):
         """Stop the application watchdog."""
 
@@ -439,6 +446,7 @@ class ApplicationHelper(commands.Cog):
             await ctx.sendmarkdown('# Application watchdog already inactive!', deletable=False)
 
     @apps.command(aliases=['check'])
+    @permission_node(f'{__name__}.enjinapps')
     async def validate(self, ctx, applicationid: int = None):
         """Validate an application against the saved template.
 

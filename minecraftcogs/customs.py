@@ -79,6 +79,7 @@ class Customs(commands.Cog):
         await self.customcmds.save()
 
     @custom.command(aliases=['execute', 'exec'])
+    @permission_node(f'{__name__}.custom')
     async def run(self, ctx, cmd: str, server: str, *args: str):
         """Runs a custom command from the library.
 

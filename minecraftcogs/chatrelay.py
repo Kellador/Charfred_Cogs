@@ -555,6 +555,7 @@ class ChatRelay(commands.Cog):
                                '\n> Some of the fields are auto-generated.')
 
     @msgtypes.command(name='add', aliases=['modify'])
+    @permission_node(f'{__name__}.types')
     async def _add(self, ctx, msgtype: str, formatstring: str, sendable: bool=True):
         """Adds a new, or modifies an existing, message type, with a format string and
         sets if it is a sendable message type or not.
@@ -568,6 +569,7 @@ class ChatRelay(commands.Cog):
         await ctx.sendmarkdown(f'# {msgtype} has been saved.')
 
     @msgtypes.command(name='remove')
+    @permission_node(f'{__name__}.types')
     async def _remove(self, ctx, msgtype: str):
         """Removes a message type."""
 
@@ -612,6 +614,7 @@ class ChatRelay(commands.Cog):
             await ctx.sendmarkdown(f'> No type routes set up.')
 
     @typeroute.command(name='register', aliases=['change'])
+    @permission_node(f'{__name__}.register')
     async def _registertyperoute(self, ctx, msgtype: str, consume: bool=False):
         """Registers a given message type to a channel.
 
@@ -645,6 +648,7 @@ class ChatRelay(commands.Cog):
         )
 
     @typeroute.command(name='unregister')
+    @permission_node(f'{__name__}.register')
     async def _unregistertyperoute(self, ctx, msgtype: str):
         """Unregisters a given message type from type routing.
 

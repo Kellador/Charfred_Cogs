@@ -59,6 +59,7 @@ class ConsoleCmds(commands.Cog):
         await ctx.sendmarkdown('\n'.join(msg))
 
     @whitelist.command()
+    @permission_node(f'{__name__}.whitelist')
     async def remove(self, ctx, player: str, category: str=None):
         """Remove a player from the whitelist."""
 
@@ -87,6 +88,7 @@ class ConsoleCmds(commands.Cog):
         await ctx.sendmarkdown('\n'.join(msg))
 
     @whitelist.command()
+    @permission_node(f'{__name__}.whitelist')
     async def check(self, ctx, player: str):
         """Check if a player is on the whitelist."""
 
@@ -124,6 +126,7 @@ class ConsoleCmds(commands.Cog):
         await ctx.sendmarkdown('\n'.join(msg))
 
     @category.command()
+    @permission_node(f'{__name__}.categories')
     async def setdefault(self, ctx, category: str):
         """Sets a defined category to be the default for whitelisting.
 
@@ -141,6 +144,7 @@ class ConsoleCmds(commands.Cog):
             await ctx.sendmarkdown(f'# {category} set as default whitelisting category.')
 
     @category.command()
+    @permission_node(f'{__name__}.categories')
     async def add(self, ctx, category: str, *servers):
         """Add a new whitelist category.
 
@@ -160,6 +164,7 @@ class ConsoleCmds(commands.Cog):
         await ctx.sendmarkdown(f'Done!')
 
     @category.command(name='remove')
+    @permission_node(f'{__name__}.categories')
     async def _remove(self, ctx, category: str, server: str=None):
         """Removes a whitelist category or a given server from a category."""
 
