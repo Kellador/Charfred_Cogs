@@ -51,7 +51,7 @@ class TellmeHelper(commands.Cog):
         if tid:
             cmd = f'tellme locate {ttype} dump all-loaded-chunks {tid}'
         else:
-            cmd = f'tellme loaded {ttype}' + ('dump' if ttype == 'chunks' else 'all dump')
+            cmd = f'tellme loaded {ttype}' + (' dump' if ttype == 'chunks' else ' all dump')
 
         async with ctx.typing():
             log.info(f'Running tellme command: \"{cmd}\" on {server}.')
