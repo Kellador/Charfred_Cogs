@@ -56,6 +56,7 @@ class TellmeHelper(commands.Cog):
         async with ctx.typing():
             log.info(f'Running tellme command: \"{cmd}\" on {server}.')
             await sendCmd(self.loop, server, cmd)
+            await ctx.sendmarkdown(f'# Running TellMe command:\n  \"{cmd}\"')
             await asyncio.sleep(2, loop=self.loop)
             await self.uploadreport(ctx, server)
 
