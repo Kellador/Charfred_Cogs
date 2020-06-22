@@ -1,6 +1,7 @@
 import logging
 import random
 import asyncio
+from datetime import datetime
 from discord.ext import commands
 
 log = logging.getLogger('charfred')
@@ -29,6 +30,14 @@ loves = [
     u"(∩^o^)⊃━☆゜.*", u"ಠ◡ಠ", u"ʢᵕᴗᵕʡ", u"(^￢^)", u"(º﹃º)", u"ಠ_ರೃ", u"d(´･ω･`)"
 ]
 
+gms = [
+    'Top o\' the mornin\' to ya!', 'Good morning, sir!', 'Good morning, madam!',
+    'o/', 'Fuck you!', 'I\'m a cybernetic organism, living tissue over metal endoskelton.',
+    'Fuck you, asshole!', 'Hello, dear!', 'Sup?', 'Good morning!', '*muffled screaming*',
+    'If you don\'t stop screwing around back there, this is what I\'m going to do with you'
+    '\n*snaps pencil*', 'Aloha!', '*high five*', '*hug*'
+]
+
 gn9s = [
     'Good night, sir!', 'Good night!', 'Nighty night!', 'Sweet dreams!',
     'Sleep well!', 'Don\'t let the bedbugs bite!', 'Pleasant dreams!',
@@ -52,11 +61,16 @@ spins = [
     [u"(°o°)", u"(°o。)", u"(。o。)", u"(。o°)", u"(°o°)", u"(°o。)", u"(。o。)", u"(。o°)"]
 ]
 
+weather = [
+    'rainy', 'sunny', 'cloudy', 'foggy', 'stormy'
+]
+
 
 class Entertain(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.loop = bot.loop
+        self.cats = {}
 
     @commands.command(aliases=['partytime'])
     async def dance(self, ctx):
@@ -104,6 +118,54 @@ class Entertain(commands.Cog):
         await ctx.send(random.choice(gn9s) + ' ' +
                        random.choice(loves))
 
+    @commands.command(aliases=['gm', 'goodmorning', 'goodday'])
+    async def morning(self, ctx):
+
+        greeting = random.choice(gms)
+        now = datetime.now()
+
+        try:
+            cat, then = self.cats[ctx.author.id]
+        except KeyError:
+            cat = None
+        else:
+            if (now - then).days > 0:
+                cat = None
+
+        if not cat:
+            log.info('Retrieving daily cat!')
+            try:
+                apitok = self.bot.cfg['cogcfgs'][f'{__name__}.catapi'][0]
+            except KeyError:
+                log.warning('No token for thecatapi.com configured!')
+                cat = None
+            else:
+                headers = {'x-api-key': apitok}
+                async with self.session.get('https://api.thecatapi.com/v1/images/search',
+                                            headers=headers) as r:
+                    jsoncat = await r.json()
+                try:
+                    cat = jsoncat[0]['url']
+                except KeyError:
+                    log.warning('Response from thecatapi.com contained no cat url!')
+                    cat = None
+                else:
+                    self.cats[ctx.author.id] = (cat, now)
+
+        out = [
+            greeting,
+            now.strftime('The date and time is:\n%c'),
+            f'I am expecting {random.choice(weather)} weather today (somewhere).'
+        ]
+
+        if cat:
+            out.append(f'Here is your daily cat for today!\n{cat}')
+
+        await ctx.send('\n'.join(out))
+
 
 def setup(bot):
+    bot.register_cfg(f'{__name__}.catapi',
+                     'Please enter your api token for thecatapi.com:\n',
+                     '')
     bot.add_cog(Entertain(bot))
