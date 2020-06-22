@@ -70,6 +70,7 @@ class Entertain(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.loop = bot.loop
+        self.session = bot.session
         self.cats = {}
 
     @commands.command(aliases=['partytime'])
@@ -159,7 +160,7 @@ class Entertain(commands.Cog):
         ]
 
         if cat:
-            out.append(f'Here is your daily cat for today!\n{cat}')
+            out.append(f'Here is your daily cat picture!\n{cat}')
 
         await ctx.send('\n'.join(out))
 
