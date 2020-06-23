@@ -130,7 +130,7 @@ class Entertain(commands.Cog):
         except KeyError:
             cat = None
         else:
-            if (now - then).days > 0:
+            if (now - then).hours > 12:
                 cat = None
 
         if not cat:
