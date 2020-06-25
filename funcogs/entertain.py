@@ -153,6 +153,15 @@ class Entertain(commands.Cog):
                 else:
                     self.cats[ctx.author.id] = (cat, now)
 
+        log.info('Retrieving random advice!')
+        async with self.session.get('https://api.adviceslip.com/advice') as r:
+            jsonadv = await r.json()
+        try:
+            advice = jsonadv['slip']['advice']
+        except KeyError:
+            log.warning('Response from adviceslip.com did not contain any advice!')
+            advice = None
+
         out = [
             greeting,
             now.strftime('The date and time is:\n%c'),
@@ -160,7 +169,10 @@ class Entertain(commands.Cog):
         ]
 
         if cat:
-            out.append(f'Here is your daily cat picture!\n{cat}')
+            out.append(f'Here is your daily cat picture:\n{cat}')
+
+        if advice:
+            out.append(f'and some advice for you:\n"{advice}"')
 
         await ctx.send('\n'.join(out))
 
