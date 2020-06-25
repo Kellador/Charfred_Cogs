@@ -155,7 +155,7 @@ class Entertain(commands.Cog):
 
         log.info('Retrieving random advice!')
         async with self.session.get('https://api.adviceslip.com/advice') as r:
-            jsonadv = await r.json()
+            jsonadv = await r.json(content_type=None)
         try:
             advice = jsonadv['slip']['advice']
         except KeyError:
