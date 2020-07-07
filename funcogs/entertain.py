@@ -65,6 +65,11 @@ weather = [
     'rainy', 'sunny', 'cloudy', 'foggy', 'stormy'
 ]
 
+cats = [
+    'ㅇㅅㅇ', '=ටᆼට=', '(=①ω①=)', '(=ＴェＴ=)', '(=ↀωↀ=)', '(⁎˃ᆺ˂)', 'ฅ•ω•ฅ',
+    '=^∇^*=', '(^･ｪ･^)'
+]
+
 
 class Entertain(commands.Cog):
     def __init__(self, bot):
@@ -119,39 +124,31 @@ class Entertain(commands.Cog):
         await ctx.send(random.choice(gn9s) + ' ' +
                        random.choice(loves))
 
+    @commands.command(aliases=['cats'])
+    async def getcat(self, ctx):
+        try:
+            apitok = self.bot.cfg['cogcfgs'][f'{__name__}.catapi'][0]
+        except KeyError:
+            log.warning('No token for thecatapi.com configured!')
+            await ctx.sendmarkdown('< No catapi token found! Sorry! >')
+        else:
+            headers = {'x-api-key': apitok}
+            async with self.session.get('https://api.thecatapi.com/v1/images/search',
+                                        headers=headers) as r:
+                jsoncat = await r.json()
+            try:
+                cat = jsoncat[0]['url']
+            except KeyError:
+                log.warning('Response from thecatapi.com contained no cat url!')
+                cat = None
+            else:
+                await ctx.send(f'{random.choice(cats)}\n{cat}')
+
     @commands.command(aliases=['gm', 'goodmorning', 'goodday'])
     async def morning(self, ctx):
 
         greeting = random.choice(gms)
         now = datetime.now()
-
-        try:
-            cat, then = self.cats[ctx.author.id]
-        except KeyError:
-            cat = None
-        else:
-            if (((now - then).seconds) / 3600) > 12:
-                cat = None
-
-        if not cat:
-            log.info('Retrieving daily cat!')
-            try:
-                apitok = self.bot.cfg['cogcfgs'][f'{__name__}.catapi'][0]
-            except KeyError:
-                log.warning('No token for thecatapi.com configured!')
-                cat = None
-            else:
-                headers = {'x-api-key': apitok}
-                async with self.session.get('https://api.thecatapi.com/v1/images/search',
-                                            headers=headers) as r:
-                    jsoncat = await r.json()
-                try:
-                    cat = jsoncat[0]['url']
-                except KeyError:
-                    log.warning('Response from thecatapi.com contained no cat url!')
-                    cat = None
-                else:
-                    self.cats[ctx.author.id] = (cat, now)
 
         log.info('Retrieving random advice!')
         async with self.session.get('https://api.adviceslip.com/advice') as r:
@@ -167,9 +164,6 @@ class Entertain(commands.Cog):
             now.strftime('The date and time is:\n%c'),
             f'I am expecting {random.choice(weather)} weather today (somewhere).'
         ]
-
-        if cat:
-            out.append(f'Here is your daily cat picture:\n{cat}')
 
         if advice:
             out.append(f'and some advice for you:\n"{advice}"')
