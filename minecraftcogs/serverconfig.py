@@ -42,6 +42,16 @@ class ServerConfig(commands.Cog):
         if timedout:
             return
 
+        moreworlds, _, timedout = await ctx.promptconfirm_or_input(
+            f'If {server} has any more worlds you would like to back up at some '
+            'point, please enter the name of those worlds, seperated by commas only.\n'
+            '< Only enter worlds that are parallel to the main world folder, '
+            'NOT inside of it. >',
+            confirm=False
+        )
+        if timedout:
+            return
+
         questing, _, timedout = await ctx.promptconfirm_or_input(
             f'If {server} has questing, which you want to back up with Spiffy, '
             f'please enter the path from {worldname} to the quest directory.\n'
@@ -56,7 +66,8 @@ class ServerConfig(commands.Cog):
             f'You have entered the following for {server}:\n'
             f'Invocation: {invocation}\n'
             f'Worldname: {worldname}\n'
-            f'Questing: {questing}\n'
+            f'More Worlds: {moreworlds if moreworlds else "Nope"}\n'
+            f'Questing: {questing if questing else "Nope"}\n'
             '# Please confirm! [y/n]'
         )
         if timedout:
@@ -67,6 +78,9 @@ class ServerConfig(commands.Cog):
                 'invocation': invocation,
                 'worldname': worldname
             }
+            if moreworlds:
+                self.servercfg['servers'][server]['moreworlds'] = \
+                    [world.strip() for world in moreworlds.split(',')]
             if questing:
                 self.servercfg['servers'][server]['questing'] = questing
             await self.servercfg.save()
@@ -168,7 +182,7 @@ class ServerConfig(commands.Cog):
             await self.servercfg.save()
             await ctx.sendmarkdown(f'# Configurations for {server} have been deleted!')
         else:
-            await ctx.sendmarkdown(f'< Deletion of configurations aborted! >')
+            await ctx.sendmarkdown('< Deletion of configurations aborted! >')
 
     @config.command()
     async def editopts(self, ctx):

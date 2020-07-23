@@ -58,7 +58,7 @@ class ServerBackups(commands.Cog):
             return f'{bpath}/{server}/{backup[0]}'
 
     @apply.command()
-    async def full(self, ctx, server: str, backup: str):
+    async def full(self, ctx, server: str, backup: str, world: str=None):
         """Applies a full world backup.
 
         All world files currently in place will be overwritten.
@@ -87,7 +87,9 @@ class ServerBackups(commands.Cog):
                 await ctx.sendmarkdown(f'{server} is still up, cannot proceed!')
                 return
             serverpath = self.servercfg['serverspath']
-            worldpath = f'{serverpath}/{server}/world'
+            if world is None:
+                world = self.servercfg['servers'][server]['worldname']
+            worldpath = f'{serverpath}/{server}/{world}'
             try:
                 log.info(f'Deleting {worldpath}')
                 rmtree(worldpath)
@@ -148,7 +150,8 @@ class ServerBackups(commands.Cog):
                 await ctx.sendmarkdown(f'{server} is still up, cannot proceed!')
                 return
             serverpath = self.servercfg['serverspath']
-            regionpath = f'{serverpath}/{server}/world/region'
+            world = self.servercfg['servers'][server]['worldname']
+            regionpath = f'{serverpath}/{server}/{world}/region'
             deleted = []
             failed = False
             for r in regions:
@@ -178,7 +181,7 @@ class ServerBackups(commands.Cog):
             def extracthelper():
                 with tarfile.open(backupfile, 'r:gz') as tf:
                     for r in regions:
-                        tf.extract(f'world/region/{r}', path=f'{serverpath}/{server}')
+                        tf.extract(f'{world}/region/{r}', path=f'{serverpath}/{server}')
 
             await self.loop.run_in_executor(None, extracthelper)
             log.info('Regions extracted from backup and placed!')
