@@ -162,7 +162,10 @@ class Entertain(commands.Cog):
 
         if data:
             try:
-                event = random.choice(data['Events'])
+                event = random.choice(data['data']['Events'])
+            except KeyError:
+                log.warning('Response content from history.muffinlabs.com/date is malformed!')
+                history = ''
             except IndexError:
                 log.warning('Apparently there are no historical events for this date, wow!')
                 history = f'\nOn this date in history, fuck all happened!\n'
