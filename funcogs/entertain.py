@@ -150,23 +150,33 @@ class Entertain(commands.Cog):
         greeting = random.choice(gms)
         now = datetime.now()
 
-        log.info('Retrieving random advice!')
-        async with self.session.get('https://api.adviceslip.com/advice') as r:
-            jsonadv = await r.json(content_type=None)
-        try:
-            advice = jsonadv['slip']['advice']
-        except KeyError:
-            log.warning('Response from adviceslip.com did not contain any advice!')
-            advice = None
+        log.info('Retrieving historical data!')
+
+        async with self.session.get('https://history.muffinlabs.com/date') as r:
+            if r.status == 200:
+                data = await r.json(content_type=None)
+            else:
+                log.warning(f'Recieved status code: {r.status} from history.muffinlabs.com/date\n'
+                            'Skipping historical data...')
+                data = None
+
+        if data:
+            try:
+                event = random.choice(data['Events'])
+            except IndexError:
+                log.warning('Apparently there are no historical events for this date, wow!')
+                history = f'\nOn this date in history, fuck all happened!\n'
+            else:
+                history = f'\nOn this date, in {event["year"]}, the following historical event took place:\n{event["text"]}\n'
+        else:
+            history = ''
 
         out = [
             greeting,
             now.strftime('The date and time is:\n%c'),
+            history,
             f'I am expecting {random.choice(weather)} weather today (somewhere).'
         ]
-
-        if advice:
-            out.append(f'and some advice for you:\n"{advice}"')
 
         await ctx.send('\n'.join(out))
 

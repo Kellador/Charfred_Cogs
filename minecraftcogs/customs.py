@@ -117,7 +117,7 @@ class Customs(commands.Cog):
             try:
                 _cmd = _cmd.format(*args)
             except IndexError:
-                await ctx.sendmarkdown(f'< Incorrect number of arguments given! Abort! >')
+                await ctx.sendmarkdown('< Incorrect number of arguments given! Abort! >')
                 return
         msg.append(f'# Executing \"{_cmd}\"...')
 

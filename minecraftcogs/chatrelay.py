@@ -236,7 +236,7 @@ class ChatRelay(commands.Cog):
                 try:
                     self.inqueue.put_nowait((client, data))
                 except asyncio.QueueFull:
-                    log.warning(f'CR-Incoming: Incoming queue full, message dropped!')
+                    log.warning('CR-Incoming: Incoming queue full, message dropped!')
         except CancelledError:
             raise
         except ConnectionResetError:
@@ -287,7 +287,7 @@ class ChatRelay(commands.Cog):
             client = None
 
         if client is None:
-            log.warning(f'CR-Connection: Using client address as name.')
+            log.warning('CR-Connection: Using client address as name.')
             client = peer
 
         await self.inqueue.put((client, f'SYS::```markdown\n# {client} connected!\n```'))
@@ -611,7 +611,7 @@ class ChatRelay(commands.Cog):
                            f'{channel.name if channel else channel_id}{suffix}\n')
             await ctx.sendmarkdown('\n'.join(out))
         else:
-            await ctx.sendmarkdown(f'> No type routes set up.')
+            await ctx.sendmarkdown('> No type routes set up.')
 
     @typeroute.command(name='register', aliases=['change'])
     @permission_node(f'{__name__}.register')
@@ -631,7 +631,7 @@ class ChatRelay(commands.Cog):
         """
 
         if msgtype not in self.cfg.types:
-            await ctx.sendmarkdown(f'< Unknown message type! >')
+            await ctx.sendmarkdown('< Unknown message type! >')
             return
 
         channel_id = str(ctx.channel.id)

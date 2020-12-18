@@ -161,7 +161,7 @@ class ConsoleCmds(commands.Cog):
                 log.info(f'Added {server} to {category}.')
                 self.servercfg['whitelistcategories'][category].append(server)
         await self.servercfg.save()
-        await ctx.sendmarkdown(f'Done!')
+        await ctx.sendmarkdown('Done!')
 
     @category.command(name='remove')
     @permission_node(f'{__name__}.categories')
